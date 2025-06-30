@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Model Viewer</title>
+    <title>Space 3D Model Viewer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
@@ -16,33 +16,22 @@
         }
         
         body {
-            background: linear-gradient(135deg, #171717, #141414);
+            background: #000;
             color: white;
             height: 100vh;
             overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
         
         .container {
             width: 100%;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
+            height: 100%;
             position: relative;
-        }
-        
-        .viewer-container {
-            flex: 1;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-            position: relative;
-            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         #viewer {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
         }
@@ -59,6 +48,7 @@
             padding: 30px 40px;
             border-radius: 15px;
             backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .spinner {
@@ -124,8 +114,16 @@
             text-align: center;
             color: white;
             font-size: 32px;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
             letter-spacing: 1px;
+            text-transform: uppercase;
+            font-weight: 300;
+            z-index: 10;
+            text-shadow: 0 0 10px rgba(79, 172, 254, 0.7);
+        }
+        
+        .title span {
+            color: #4facfe;
+            font-weight: bold;
         }
         
         .status-bar {
@@ -141,6 +139,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            z-index: 10;
         }
         
         .status-indicator {
@@ -165,6 +164,7 @@
             border-radius: 12px;
             backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
         }
         
         .model-info h3 {
@@ -188,25 +188,45 @@
         
         .info-value {
             font-weight: 500;
+            color: #4facfe;
+        }
+        
+        .nebula-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, 
+                rgba(79, 172, 254, 0.1) 0%, 
+                rgba(79, 172, 254, 0.05) 40%, 
+                rgba(0, 0, 0, 0) 70%);
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .reset-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(79, 172, 254, 0.2);
+            color: white;
+            border: 1px solid rgba(79, 172, 254, 0.5);
+            padding: 10px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        
+        .reset-btn:hover {
+            background: rgba(79, 172, 254, 0.3);
+            transform: translateY(-2px);
         }
         
         @media (max-width: 768px) {
-            .container {
-                height: 100vh;
-                border-radius: 0;
-            }
-            
-            .viewer-container {
-                border-radius: 0;
-            }
-            
-            .controls-info {
-                font-size: 14px;
-                bottom: 10px;
-                left: 10px;
-                max-width: 250px;
-            }
-            
             .title {
                 font-size: 24px;
                 top: 10px;
@@ -217,80 +237,154 @@
                 right: 10px;
                 font-size: 12px;
             }
+            
+            .controls-info {
+                font-size: 14px;
+                bottom: 10px;
+                left: 10px;
+                max-width: 250px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="title">3D Model Viewer</div>
-        
-        <div class="viewer-container">
-            <div id="viewer"></div>
-            <div class="loading" id="loadingIndicator">
-                <div class="spinner"></div>
-                <p>Loading model...</p>
-            </div>
+        <div class="nebula-overlay"></div>
+        <div id="viewer"></div>
+        <div class="loading" id="loadingIndicator">
+            <div class="spinner"></div>
+            <p>Loading space model...</p>
         </div>
         
         <div class="status-bar" id="statusBar">
             <div class="status-indicator" id="statusIndicator"></div>
-            <span id="statusText">Loading...</span>
+            <span id="statusText">Connecting...</span>
         </div>
         
-        <!-- <div class="model-info">
-            <h3>📁 Model Info</h3>
+        <div class="model-info">
+            <h3>🌌 Model Info</h3>
             <div class="info-row">
                 <span class="info-label">File name:</span>
-                <span class="info-value" id="fileName">my-room.glb</span>
+                <span class="info-value" id="fileName">spaceship.glb</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Status:</span>
                 <span class="info-value" id="fileStatus">Loading...</span>
             </div>
-        </div> -->
+        </div>
+        
+        <button class="reset-btn" id="resetBtn">Reset view</button>
     </div>
 
     <script>
         let scene, camera, renderer, controls, model;
-        const modelPath = 'my-room.glb';
+        let stars = [];
+        const modelPath = 'my-room.glb';  
+        
+        function createStarfield() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0x444444,
+                size: 1.5,
+                sizeAttenuation: true
+            });
+            
+            const starVertices = [];
+            for (let i = 0; i < 10000; i++) {
+                const x = THREE.MathUtils.randFloatSpread(2000);
+                const y = THREE.MathUtils.randFloatSpread(2000);
+                const z = THREE.MathUtils.randFloatSpread(2000);
+                starVertices.push(x, y, z);
+            }
+            
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starField = new THREE.Points(starGeometry, starMaterial);
+            scene.add(starField);
+            
+            const bigStarsGeometry = new THREE.BufferGeometry();
+            const bigStarsMaterial = new THREE.PointsMaterial({
+                size: 3,
+                sizeAttenuation: true,
+                vertexColors: true
+            });
+            
+            const bigStarsVertices = [];
+            const bigStarsColors = [];
+            for (let i = 0; i < 500; i++) {
+                const x = THREE.MathUtils.randFloatSpread(1800);
+                const y = THREE.MathUtils.randFloatSpread(1800);
+                const z = THREE.MathUtils.randFloatSpread(1800);
+                bigStarsVertices.push(x, y, z);
+                
+                const colorRand = Math.random();
+                if (colorRand < 0.7) {
+                    bigStarsColors.push(1, 1, 1); // trắng
+                } else if (colorRand < 0.85) {
+                    bigStarsColors.push(0.6, 0.8, 1); // xanh nhạt
+                } else if (colorRand < 0.95) {
+                    bigStarsColors.push(1, 0.8, 0.6); // cam nhạt
+                } else {
+                    bigStarsColors.push(1, 0.6, 0.6); // đỏ nhạt
+                }
+            }
+            
+            bigStarsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(bigStarsVertices, 3));
+            bigStarsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(bigStarsColors, 3));
+            const bigStars = new THREE.Points(bigStarsGeometry, bigStarsMaterial);
+            scene.add(bigStars);
+            
+            const nebulaGeometry = new THREE.SphereGeometry(500, 32, 32);
+            const nebulaMaterial = new THREE.MeshBasicMaterial({
+                color: 0x4facfe,
+                transparent: true,
+                opacity: 0.05
+            });
+            const nebula = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
+            nebula.position.set(300, -200, -500);
+            scene.add(nebula);
+            
+            const nebula2 = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
+            nebula2.position.set(-400, 300, 600);
+            nebula2.scale.set(1.5, 1.5, 1.5);
+            nebula2.material.color.set(0xff6b6b);
+            nebula2.material.opacity = 0.03;
+            scene.add(nebula2);
+        }
         
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a1a);
-            scene.fog = new THREE.Fog(0x0a0a1a, 5, 15);
             
             camera = new THREE.PerspectiveCamera(
                 75, 
                 window.innerWidth / window.innerHeight, 
                 0.1, 
-                1000
+                3000
             );
-            camera.position.set(0, 0, 5);
+            camera.position.set(0, 0, 15);
             
             renderer = new THREE.WebGLRenderer({ 
                 antialias: true,
                 alpha: true
             });
-            renderer.setSize(
-                document.querySelector('.viewer-container').offsetWidth, 
-                document.querySelector('.viewer-container').offsetHeight
-            );
+            renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('viewer').appendChild(renderer.domElement);
             
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            createStarfield();
+            
+            const ambientLight = new THREE.AmbientLight(0x888888, 0.3);
             scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            directionalLight.position.set(5,5,5);
+            
+            const directionalLight = new THREE.DirectionalLight(0x888888, 0.5);
+            directionalLight.position.set(5, 5, 5);
             scene.add(directionalLight);
             
-            const pointLight1 = new THREE.PointLight(0x4facfe, 1, 20);
-            pointLight1.position.set(3, 3, 3);
+            const pointLight1 = new THREE.PointLight(0x4facfe, 0.5, 100);
+            pointLight1.position.set(10, 10, 10);
             scene.add(pointLight1);
             
-            const pointLight2 = new THREE.PointLight(0x888888, 1, 20);
-            pointLight2.position.set(-3, -3, -3);
+            const pointLight2 = new THREE.PointLight(0x888888, 0.5, 20);
+            pointLight2.position.set(-10, -10, -10);
             scene.add(pointLight2);
             
             controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -299,32 +393,43 @@
             controls.rotateSpeed = 0.8;
             controls.zoomSpeed = 1.2;
             controls.panSpeed = 0.8;
+
             controls.minDistance = 0.1;
-            controls.maxDistance = 100;
+            controls.maxDistance = 1000;
             
-            renderer.domElement.addEventListener('dblclick', resetView);
             window.addEventListener('resize', onWindowResize);
+            
             loadModel();
+            
+            document.getElementById('resetBtn').addEventListener('click', resetView);
         }
         
         function loadModel() {
-            document.getElementById('statusText').textContent = 'Loading...';
+            document.getElementById('statusText').textContent = 'Loading model...';
             
             const loader = new THREE.GLTFLoader();
-
+            
             loader.load(
                 modelPath,
                 function(gltf) {
                     model = gltf.scene;
                     
                     centerModel(model);
+                    
+                    model.traverse(function(node) {
+                        if (node.isMesh) {
+                            node.material.emissive = new THREE.Color(0x111111);
+                            node.material.emissiveIntensity = 0.2;
+                        }
+                    });
+                    
                     scene.add(model);
                     
                     document.getElementById('loadingIndicator').style.display = 'none';
-                    document.getElementById('statusText').textContent = 'Loaded successfully';
+                    
+                    document.getElementById('statusText').textContent = 'Connected';
                     document.getElementById('statusIndicator').classList.add('active');
                     document.getElementById('fileStatus').textContent = 'Loaded';
-                    document.getElementById('fileSize').textContent = '2.8 MB';
                 },
                 undefined,
                 function(error) {
@@ -334,7 +439,7 @@
                         <p>Cannot load model</p>
                         <p style="font-size: 14px; margin-top: 10px;">Please make sure the file exists: ${modelPath}</p>
                     `;
-                    document.getElementById('statusText').textContent = 'Error loading';
+                    document.getElementById('statusText').textContent = 'Connection error';
                 }
             );
         }
@@ -351,7 +456,7 @@
             const maxDim = Math.max(size.x, size.y, size.z);
             const fov = camera.fov * (Math.PI / 180);
             let cameraZ = Math.abs(maxDim / (2 * Math.tan(fov / 2)));
-            cameraZ *= 1.8;
+                        cameraZ *= 1.8;
             
             camera.position.z = cameraZ;
             
@@ -360,30 +465,30 @@
         
         function resetView() {
             if (model) {
-                camera.position.set(0, 0, 5);
+                camera.position.set(0, 0, 15);
+                
                 controls.reset();
+                
                 centerModel(model);
             }
         }
-
+        
         function onWindowResize() {
-            camera.aspect = document.querySelector('.viewer-container').offsetWidth / 
-                            document.querySelector('.viewer-container').offsetHeight;
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(
-                document.querySelector('.viewer-container').offsetWidth, 
-                document.querySelector('.viewer-container').offsetHeight
-            );
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
         
         function animate() {
             requestAnimationFrame(animate);
-            if (model) {
-                model.rotation.y += 0.005;
-            }
+            
             if (controls) {
                 controls.update();
             }
+            
+            camera.position.x += 0.005;
+            // camera.position.y += 0.0003;
+            
             renderer.render(scene, camera);
         }
         
