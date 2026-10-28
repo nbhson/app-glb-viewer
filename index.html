@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Model Viewer</title>
+    <meta name="description" content="WebGL 3D model viewer — explore .glb models with orbit, zoom, pan and auto-rotate controls.">
+    <meta name="theme-color" content="#080b12">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23080b12'/><path d='M16 6l8 4.6v10.8L16 26l-8-4.6V10.6z' fill='none' stroke='%234facfe' stroke-width='2'/><circle cx='16' cy='16' r='3' fill='%234facfe'/></svg>">
+    <title>GLB Viewer — 3D Model Viewer</title>
     <script type="importmap">
     {
         "imports": {
@@ -93,7 +96,7 @@
         </div>
         <div class="model-panel card">
             <h3>🌌 Model Info</h3>
-            <div class="row"><span class="label">File</span><span class="value" id="fileName">my-room.glb</span></div>
+            <div class="row"><span class="label">File</span><span class="value" id="fileName">—</span></div>
             <div class="row"><span class="label">Status</span><span class="value" id="fileStatus">Loading…</span></div>
             <div class="row"><span class="label">Meshes</span><span class="value" id="meshCount">—</span></div>
             <div class="row"><span class="label">Triangles</span><span class="value" id="triCount">—</span></div>
@@ -129,11 +132,13 @@
 
     let scene, camera, renderer, controls, model;
     let autoRotate = false;
+    let initialCameraPos = null;
+    let resizeScheduled = false;
 
     function createStarfield() {
         const starGeometry = new THREE.BufferGeometry();
         const starVertices = [];
-        for (let i = 0; i < 10000; i++) {
+        for (let i = 0; i < 4000; i++) {
             starVertices.push(
                 THREE.MathUtils.randFloatSpread(2000),
                 THREE.MathUtils.randFloatSpread(2000),
@@ -141,11 +146,7 @@
             );
         }
         starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-        scene.add(new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0x444444, size: 1.5, sizeAttenuation: true })));
-
-        bigGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        bigGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        scene.add(new THREE.Points(bigGeo, new THREE.PointsMaterial({ size: 3, sizeAttenuation: true, vertexColors: true })));
+        scene.add(new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0x8fa8c0, size: 1.5, sizeAttenuation: true })));
 
         const nebulaGeo = new THREE.SphereGeometry(500, 32, 32);
         const nebula1 = new THREE.Mesh(nebulaGeo, new THREE.MeshBasicMaterial({ color: 0x4facfe, transparent: true, opacity: 0.05 }));
@@ -194,7 +195,6 @@
         controls.maxDistance = 1000;
 
         window.addEventListener('resize', onWindowResize);
-        loadModel();
 
         $('resetBtn').addEventListener('click', resetView);
         $('autoRotateBtn').addEventListener('click', (e) => {
@@ -203,10 +203,12 @@
             controls.autoRotateSpeed = 0.8;
             e.currentTarget.classList.toggle('active', autoRotate);
         });
+        loadModel();
     }
 
     function loadModel() {
         $('statusText').textContent = 'Loading model…';
+        $('fileName').textContent = modelPath;
         const loader = new GLTFLoader();
         loader.load(modelPath, (gltf) => {
             model = gltf.scene;
@@ -231,7 +233,17 @@
             $('triCount').textContent = Math.round(triCount).toLocaleString();
         }, undefined, (error) => {
             console.error('Error loading model:', error);
-            $('loadingIndicator').innerHTML = '<div style="font-size:40px;margin-bottom:12px">⚠️</div><p>Cannot load model</p><p style="font-size:0.85rem;margin-top:8px;color:var(--text-muted)">File: ' + modelPath + '</p>';
+            const indicator = $('loadingIndicator');
+            indicator.textContent = '';
+            const icon = document.createElement('div');
+            icon.style.cssText = 'font-size:40px;margin-bottom:12px';
+            icon.textContent = '⚠️';
+            const msg = document.createElement('p');
+            msg.textContent = 'Cannot load model';
+            const file = document.createElement('p');
+            file.style.cssText = 'font-size:0.85rem;margin-top:8px;color:var(--text-muted)';
+            file.textContent = 'File: ' + modelPath;
+            indicator.append(icon, msg, file);
             $('statusText').textContent = 'Connection error';
         });
     }
@@ -243,15 +255,28 @@
         m.position.x -= center.x; m.position.y -= center.y; m.position.z -= center.z;
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
-        camera.position.z = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.8;
+        const dist = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.8;
+        camera.position.set(0, 0, dist);
+        controls.target.set(0, 0, 0);
         controls.update();
+        if (!initialCameraPos) initialCameraPos = camera.position.clone();
     }
 
-    function resetView() { if (model) { centerModel(model); controls.reset(); } }
+    function resetView() {
+        if (!model || !initialCameraPos) return;
+        camera.position.copy(initialCameraPos);
+        controls.target.set(0, 0, 0);
+        controls.update();
+    }
     function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        if (resizeScheduled) return;
+        resizeScheduled = true;
+        requestAnimationFrame(() => {
+            resizeScheduled = false;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     }
     function animate() {
         requestAnimationFrame(animate);
