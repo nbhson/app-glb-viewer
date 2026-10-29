@@ -82,9 +82,31 @@
         }
         .btn:hover { background: rgba(79,172,254,0.3); transform: translateY(-2px); }
         .btn.active { background: var(--accent); color: #04121f; font-weight: 600; }
+        .env-select {
+            background: rgba(79,172,254,0.15); color: var(--text);
+            border: 1px solid rgba(79,172,254,0.4); padding: 0.6rem 2rem 0.6rem 1rem;
+            border-radius: 999px; cursor: pointer; font-size: 0.85rem;
+            appearance: none; backdrop-filter: blur(12px);
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23e8f4ff' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.7rem center;
+        }
+        .env-select:focus-visible { outline: 2px solid var(--accent); }
+        .progress-line {
+            height: 4px; border-radius: 999px; overflow: hidden;
+            background: rgba(79,172,254,0.15); margin-top: 0.8rem; display: none;
+        }
+        .progress-line .bar { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }
+        .kbd-hint { margin-top: 0.7rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.7; }
+        .kbd-hint kbd {
+            background: rgba(79,172,254,0.15); border: 1px solid var(--border);
+            border-radius: 4px; padding: 1px 5px; font-family: inherit; font-size: 0.68rem;
+        }
         @media (max-width: 768px) {
             .model-panel, .controls-panel { display: none; }
             .title-bar h1 { font-size: 1.1rem; }
+            .btn-row { left: 1.25rem; flex-wrap: wrap; justify-content: flex-end; }
+            .btn, .env-select { padding: 0.5rem 0.9rem; font-size: 0.78rem; }
         }
     </style>
 </head>
@@ -100,6 +122,8 @@
             <div class="row"><span class="label">Status</span><span class="value" id="fileStatus">Loading…</span></div>
             <div class="row"><span class="label">Meshes</span><span class="value" id="meshCount">—</span></div>
             <div class="row"><span class="label">Triangles</span><span class="value" id="triCount">—</span></div>
+            <div class="row"><span class="label">Size</span><span class="value" id="fileSize">—</span></div>
+            <div class="progress-line" id="progress-line"><div class="bar" id="progress-bar"></div></div>
         </div>
         <div class="controls-panel card">
             <h3>🎮 Controls</h3>
@@ -108,15 +132,30 @@
                 <li><span class="info-icon">⧉</span> Scroll to zoom</li>
                 <li><span class="info-icon">✥</span> Right-drag to pan</li>
             </ul>
+            <div class="kbd-hint">
+                <kbd>R</kbd> reset · <kbd>Space</kbd> rotate · <kbd>G</kbd> grid<br>
+                <kbd>W</kbd> wireframe · <kbd>P</kbd> screenshot · <kbd>F</kbd> fullscreen
+            </div>
         </div>
         <div class="status-pill">
             <div class="dot" id="statusIndicator"></div>
             <span id="statusText">Connecting…</span>
         </div>
         <div class="btn-row">
-            <button class="btn" id="autoRotateBtn" title="Toggle auto-rotate">⟳ Auto-rotate</button>
+            <select class="env-select" id="envSelect" aria-label="Environment lighting preset" title="Environment preset">
+                <option value="studio" selected>💡 Studio</option>
+                <option value="sunset">🌇 Sunset</option>
+                <option value="night">🌙 Night</option>
+            </select>
+            <button class="btn" id="screenshotBtn" title="Capture PNG (P)">📷 Photo</button>
+            <button class="btn" id="openFileBtn" title="Open a local .glb file">📂 Open</button>
+            <button class="btn" id="gridBtn" title="Toggle grid (G)">▦ Grid</button>
+            <button class="btn" id="wireframeBtn" title="Toggle wireframe (W)">◫ Wireframe</button>
+            <button class="btn" id="fullscreenBtn" title="Fullscreen (F)">⛶</button>
+            <button class="btn" id="autoRotateBtn" title="Toggle auto-rotate (Space)">⟳ Auto-rotate</button>
             <button class="btn" id="resetBtn">Reset view</button>
         </div>
+        <input type="file" id="file-input" accept=".glb,model/gltf-binary" hidden />
     </div>
     <div class="loading" id="loadingIndicator">
         <div class="spinner"></div>
@@ -134,6 +173,55 @@
     let autoRotate = false;
     let initialCameraPos = null;
     let resizeScheduled = false;
+    let grid = null;
+    let wireframe = false;
+    let currentObjectURL = null; // objectURL của file local đang mở
+    let ambientLight, keyLight, fillLight, rimLight;
+
+    // ---------- Environment presets ----------
+    const ENV_PRESETS = {
+        studio: {
+            bg: 0x080b12, fogDensity: 0.0004, exposure: 1.1,
+            ambient: { color: 0x888888, intensity: 0.6 },
+            key: { color: 0xffffff, intensity: 1.2 },
+            fill: { color: 0x4facfe, intensity: 30 },
+            rim: { color: 0x888888, intensity: 0.5 },
+        },
+        sunset: {
+            bg: 0x180d06, fogDensity: 0.0008, exposure: 1.25,
+            ambient: { color: 0x885544, intensity: 0.8 },
+            key: { color: 0xffa25e, intensity: 2.2 },
+            fill: { color: 0xff6b6b, intensity: 18 },
+            rim: { color: 0xffd9a0, intensity: 1.2 },
+        },
+        night: {
+            bg: 0x01030a, fogDensity: 0.0012, exposure: 0.85,
+            ambient: { color: 0x334466, intensity: 0.35 },
+            key: { color: 0x9db8ff, intensity: 0.8 },
+            fill: { color: 0x4facfe, intensity: 12 },
+            rim: { color: 0x6b8fa8, intensity: 0.9 },
+        },
+    };
+
+    function applyEnvPreset(name) {
+        const p = ENV_PRESETS[name];
+        if (!p) return;
+        scene.background = new THREE.Color(p.bg);
+        scene.fog = new THREE.FogExp2(p.bg, p.fogDensity);
+        renderer.toneMappingExposure = p.exposure;
+        ambientLight.color.set(p.ambient.color);
+        ambientLight.intensity = p.ambient.intensity;
+        keyLight.color.set(p.key.color);
+        keyLight.intensity = p.key.intensity;
+        fillLight.color.set(p.fill.color);
+        fillLight.intensity = p.fill.intensity;
+        rimLight.color.set(p.rim.color);
+        rimLight.intensity = p.rim.intensity;
+        if (grid) {
+            grid.material.color.set(name === 'night' ? 0x2a4a66 : 0x4facfe);
+            grid.material.opacity = name === 'night' ? 0.18 : 0.3;
+        }
+    }
 
     function createStarfield() {
         const starGeometry = new THREE.BufferGeometry();
@@ -174,16 +262,23 @@
 
         createStarfield();
 
-        scene.add(new THREE.AmbientLight(0x888888, 0.6));
-        const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        ambientLight = new THREE.AmbientLight(0x888888, 0.6);
+        scene.add(ambientLight);
+        keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
         keyLight.position.set(5, 5, 5);
         scene.add(keyLight);
-        const fillLight = new THREE.PointLight(0x4facfe, 30, 100);
+        fillLight = new THREE.PointLight(0x4facfe, 30, 100);
         fillLight.position.set(10, 10, 10);
         scene.add(fillLight);
-        const rimLight = new THREE.PointLight(0x888888, 0.5, 20);
+        rimLight = new THREE.PointLight(0x888888, 0.5, 20);
         rimLight.position.set(-10, -10, -10);
         scene.add(rimLight);
+
+        grid = new THREE.GridHelper(40, 40, 0x4facfe, 0x1e3a52);
+        grid.material.transparent = true;
+        grid.material.opacity = 0.3;
+        grid.visible = false;
+        scene.add(grid);
 
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -203,22 +298,171 @@
             controls.autoRotateSpeed = 0.8;
             e.currentTarget.classList.toggle('active', autoRotate);
         });
-        loadModel();
+        $('envSelect').addEventListener('change', (e) => applyEnvPreset(e.target.value));
+        $('gridBtn').addEventListener('click', toggleGrid);
+        $('wireframeBtn').addEventListener('click', toggleWireframe);
+        $('screenshotBtn').addEventListener('click', captureScreenshot);
+        $('fullscreenBtn').addEventListener('click', toggleFullscreen);
+        $('openFileBtn').addEventListener('click', () => $('file-input').click());
+        $('file-input').addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) loadLocalFile(file);
+            e.target.value = ''; // cho phép chọn lại cùng 1 file
+        });
+
+        // Drag & drop file .glb vào canvas
+        window.addEventListener('dragover', (e) => { e.preventDefault(); });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const file = e.dataTransfer?.files?.[0];
+            if (file && file.name.toLowerCase().endsWith('.glb')) loadLocalFile(file);
+        });
+
+        // Phím tắt — bỏ qua khi đang gõ trong input/select
+        window.addEventListener('keydown', (e) => {
+            if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+            switch (e.key.toLowerCase()) {
+                case 'r': resetView(); break;
+                case 'g': toggleGrid(); break;
+                case 'w': toggleWireframe(); break;
+                case 'p': captureScreenshot(); break;
+                case 'f': toggleFullscreen(); break;
+                case ' ':
+                    e.preventDefault();
+                    $('autoRotateBtn').click();
+                    break;
+            }
+        });
+
+        applyEnvPreset('studio');
+        loadModelFromURL(modelPath, 'my-room.glb');
     }
 
-    function loadModel() {
+    function loadLocalFile(file) {
+        const url = URL.createObjectURL(file);
+        loadModelFromURL(url, file.name, { revokeOnLoad: true });
+    }
+
+    function toggleGrid() {
+        grid.visible = !grid.visible;
+        $('gridBtn').classList.toggle('active', grid.visible);
+    }
+
+    function toggleWireframe() {
+        wireframe = !wireframe;
+        $('wireframeBtn').classList.toggle('active', wireframe);
+        if (!model) return;
+        model.traverse((node) => {
+            if (!node.isMesh) return;
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            for (const mat of mats) {
+                if (mat && 'wireframe' in mat) mat.wireframe = wireframe;
+            }
+        });
+    }
+
+    function captureScreenshot() {
+        // Render ngay trước khi đọc canvas — không cần preserveDrawingBuffer
+        renderer.render(scene, camera);
+        try {
+            const url = renderer.domElement.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'glb-viewer-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+            a.click();
+        } catch (err) {
+            console.error('Screenshot failed:', err);
+        }
+    }
+
+    function toggleFullscreen() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen?.();
+        } else {
+            document.documentElement.requestFullscreen?.();
+        }
+    }
+
+    function disposeModel(obj) {
+        if (!obj) return;
+        scene.remove(obj);
+        obj.traverse((node) => {
+            if (node.isMesh) {
+                node.geometry?.dispose();
+                const mats = Array.isArray(node.material) ? node.material : [node.material];
+                for (const mat of mats) {
+                    if (!mat) continue;
+                    for (const key of Object.keys(mat)) {
+                        const v = mat[key];
+                        if (v && v.isTexture) v.dispose();
+                    }
+                    mat.dispose();
+                }
+            }
+        });
+    }
+
+    function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        let v = bytes;
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+        return v.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    }
+
+    const LOADING_SPINNER_HTML = `
+        <div class="spinner"></div>
+        <p>Loading 3D model…</p>`;
+
+    function loadModelFromURL(url, name, { revokeOnLoad = false } = {}) {
         $('statusText').textContent = 'Loading model…';
-        $('fileName').textContent = modelPath;
+        $('fileName').textContent = name;
+        $('fileStatus').textContent = 'Loading…';
+        $('fileSize').textContent = '—';
+        const indicator = $('loadingIndicator');
+        // Khôi phục spinner (lần trước có thể đã bị thay bằng error UI)
+        indicator.innerHTML = LOADING_SPINNER_HTML;
+        indicator.style.display = 'block';
+
+        // Dọn model + file URL cũ trước khi load mới (tránh leak GPU/bộ nhớ)
+        if (model) {
+            scene.remove(model);
+            disposeModel(model);
+            model = null;
+        }
+        if (currentObjectURL) {
+            URL.revokeObjectURL(currentObjectURL);
+            currentObjectURL = null;
+        }
+        if (revokeOnLoad) currentObjectURL = url;
+
+        const progressLine = $('progress-line');
+        const progressBar = $('progress-bar');
+        progressLine.style.display = 'block';
+        progressBar.style.width = '0%';
+
         const loader = new GLTFLoader();
-        loader.load(modelPath, (gltf) => {
+        loader.load(url, (gltf) => {
             model = gltf.scene;
             centerModel(model);
             model.traverse((node) => {
-                if (node.isMesh) node.material.emissive = new THREE.Color(0x111111);
+                // Emissive chỉ tồn tại trên Standard/Physical material
+                if (!node.isMesh) return;
+                const mats = Array.isArray(node.material) ? node.material : [node.material];
+                for (const mat of mats) {
+                    if (mat && mat.emissive) mat.emissive = new THREE.Color(0x111111);
+                }
             });
             scene.add(model);
+
+            // Grid nằm ngay dưới đáy model
+            const box = new THREE.Box3().setFromObject(model);
+            grid.position.y = box.min.y - 0.01;
+
+            progressLine.style.display = 'none';
             $('loadingIndicator').style.display = 'none';
-            $('statusText').textContent = 'Connected';
+            $('statusText').textContent = 'Loaded';
             $('statusIndicator').classList.add('active');
             $('fileStatus').textContent = 'Loaded ✓';
             let meshCount = 0, triCount = 0;
@@ -231,8 +475,17 @@
             });
             $('meshCount').textContent = meshCount;
             $('triCount').textContent = Math.round(triCount).toLocaleString();
-        }, undefined, (error) => {
+            if (gltf.asset?.generator) {
+                console.info('GLTF generator:', gltf.asset.generator);
+            }
+        }, (xhr) => {
+            if (progressBar && xhr.total > 0) {
+                progressBar.style.width = Math.round((xhr.loaded / xhr.total) * 100) + '%';
+                $('fileSize').textContent = formatBytes(xhr.total);
+            }
+        }, (error) => {
             console.error('Error loading model:', error);
+            progressLine.style.display = 'none';
             const indicator = $('loadingIndicator');
             indicator.textContent = '';
             const icon = document.createElement('div');
@@ -242,7 +495,7 @@
             msg.textContent = 'Cannot load model';
             const file = document.createElement('p');
             file.style.cssText = 'font-size:0.85rem;margin-top:8px;color:var(--text-muted)';
-            file.textContent = 'File: ' + modelPath;
+            file.textContent = 'File: ' + name;
             indicator.append(icon, msg, file);
             $('statusText').textContent = 'Connection error';
         });
@@ -259,7 +512,8 @@
         camera.position.set(0, 0, dist);
         controls.target.set(0, 0, 0);
         controls.update();
-        if (!initialCameraPos) initialCameraPos = camera.position.clone();
+        // Luôn cập nhật theo model mới nhất — reset view phải khớp model đang xem
+        initialCameraPos = camera.position.clone();
     }
 
     function resetView() {
