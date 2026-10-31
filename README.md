@@ -1,5 +1,7 @@
 # GLB Viewer
 
+[![CI](https://github.com/nbhson/app-glb-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/nbhson/app-glb-viewer/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 WebGL 3D model viewer dùng [Three.js](https://threejs.org/) (ES modules qua importmap — không cần build step).
 
 ## Tính năng
